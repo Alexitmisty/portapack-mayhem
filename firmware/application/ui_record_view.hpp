@@ -36,104 +36,110 @@
 namespace ui {
 
 class RecordView : public View {
-public:
-	std::function<void(std::string)> on_error { };
+   public:
+    std::function<void(std::string)> on_error{};
 
-	enum FileType {
-		RawS16 = 2,
-		WAV = 3,
-	};
+    enum FileType {
+        RawS8 = 1,
+        RawS16 = 2,
+        WAV = 3,
+    };
 
-	RecordView(
-		const Rect parent_rect,
-		std::filesystem::path filename_stem_pattern,
-		FileType file_type,
-		const size_t write_size,
-		const size_t buffer_count
-	);
-	~RecordView();
+    RecordView(
+        const Rect parent_rect,
+        const std::filesystem::path& filename_stem_pattern,
+        const std::filesystem::path& folder,
+        FileType file_type,
+        const size_t write_size,
+        const size_t buffer_count);
+    ~RecordView();
 
-	void focus() override;
+    void focus() override;
 
-	void set_sampling_rate(const size_t new_sampling_rate);
+    /* Sets the sampling rate for the baseband.
+     * NB: Do not pre-apply any oversampling. This function will determine
+     * the correct amount of oversampling and return the actual sample rate
+     * that can be used to configure the radio or other UI element. */
+    uint32_t set_sampling_rate(uint32_t new_sampling_rate);
 
-	void start();
-	void stop();
-	void on_hide() override;
+    void set_file_type(const FileType v) { file_type = v; }
 
-	bool is_active() const;
+    void start();
+    void stop();
+    void on_hide() override;
 
-	void set_filename_date_frequency(bool set);
+    bool is_active() const;
 
-private:
-	void toggle();
-	//void toggle_pitch_rssi();
-	Optional<File::Error> write_metadata_file(const std::filesystem::path& filename);
+    void set_filename_date_frequency(bool set);
 
-	void on_tick_second();
-	void update_status_display();
+   private:
+    void toggle();
+    // void toggle_pitch_rssi();
 
-	void handle_capture_thread_done(const File::Error error);
-	void handle_error(const File::Error error);
+    void on_tick_second();
+    void update_status_display();
 
-	//bool pitch_rssi_enabled = false;
-	
-	// Time Stamp
-	bool filename_date_frequency = false;
-    rtc::RTC datetime { };
+    void handle_capture_thread_done(const File::Error error);
+    void handle_error(const File::Error error);
 
-	const std::filesystem::path filename_stem_pattern;
-	const FileType file_type;
-	const size_t write_size;
-	const size_t buffer_count;
-	size_t sampling_rate { 0 };
-	SignalToken signal_token_tick_second { };
+    OversampleRate get_oversample_rate(uint32_t sample_rate);
 
-	Rectangle rect_background {
-		Color::black()
-	};
-	
-	/*ImageButton button_pitch_rssi {
-		{ 2, 0 * 16, 3 * 8, 1 * 16 },
-		&bitmap_rssipwm,
-		Color::orange(),
-		Color::black()
-	};*/
+    // bool pitch_rssi_enabled = false;
 
-	ImageButton button_record {
-		//{ 4 * 8, 0 * 16, 2 * 8, 1 * 16 },
-		{ 0 * 8, 0 * 16, 2 * 8, 1 * 16 },
-		&bitmap_record,
-		Color::red(),
-		Color::black()
-	};
+    // Time Stamp
+    bool filename_date_frequency = false;
+    rtc::RTC datetime{};
 
-	Text text_record_filename {
-		{ 7 * 8, 0 * 16, 8 * 8, 16 },
-		"",
-	};
+    const std::filesystem::path filename_stem_pattern;
+    const std::filesystem::path folder;
+    FileType file_type;
+    const size_t write_size;
+    const size_t buffer_count;
+    uint32_t sampling_rate{0};
+    SignalToken signal_token_tick_second{};
 
-	Text text_record_dropped {
-		{ 16 * 8, 0 * 16, 3 * 8, 16 },
-		"",
-	};
+    Rectangle rect_background{
+        Color::black()};
 
-	Text text_time_available {
-		{ 21 * 8, 0 * 16, 9 * 8, 16 },
-		"",
-	};
+    /*ImageButton button_pitch_rssi {
+                { 2, 0 * 16, 3 * 8, 1 * 16 },
+                &bitmap_rssipwm,
+                Color::orange(),
+                Color::black()
+        };*/
 
-	std::unique_ptr<CaptureThread> capture_thread { };
+    ImageButton button_record{
+        //{ 4 * 8, 0 * 16, 2 * 8, 1 * 16 },
+        {0 * 8, 0 * 16, 2 * 8, 1 * 16},
+        &bitmap_record,
+        Color::red(),
+        Color::black()};
 
-	MessageHandlerRegistration message_handler_capture_thread_error {
-		Message::ID::CaptureThreadDone,
-		[this](const Message* const p) {
-			const auto message = *reinterpret_cast<const CaptureThreadDoneMessage*>(p);
-			this->handle_capture_thread_done(message.error);
-		}
-	};
+    Text text_record_filename{
+        {7 * 8, 0 * 16, 8 * 8, 16},
+        "",
+    };
+
+    Text text_record_dropped{
+        {16 * 8, 0 * 16, 3 * 8, 16},
+        "",
+    };
+
+    Text text_time_available{
+        {21 * 8, 0 * 16, 9 * 8, 16},
+        "",
+    };
+
+    std::unique_ptr<CaptureThread> capture_thread{};
+
+    MessageHandlerRegistration message_handler_capture_thread_error{
+        Message::ID::CaptureThreadDone,
+        [this](const Message* const p) {
+            const auto message = *reinterpret_cast<const CaptureThreadDoneMessage*>(p);
+            this->handle_capture_thread_done(message.error);
+        }};
 };
 
 } /* namespace ui */
 
-#endif/*__UI_RECORD_VIEW_H__*/
+#endif /*__UI_RECORD_VIEW_H__*/

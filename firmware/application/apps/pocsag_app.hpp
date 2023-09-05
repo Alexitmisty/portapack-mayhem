@@ -24,125 +24,260 @@
 #define __POCSAG_APP_H__
 
 #include "ui_widget.hpp"
+#include "ui_freq_field.hpp"
 #include "ui_receiver.hpp"
 #include "ui_rssi.hpp"
+#include "ui_styles.hpp"
 
-#include "log_file.hpp"
 #include "app_settings.hpp"
+#include "log_file.hpp"
 #include "pocsag.hpp"
 #include "pocsag_packet.hpp"
+#include "radio_state.hpp"
+
+#include <functional>
 
 class POCSAGLogger {
-public:
-	Optional<File::Error> append(const std::string& filename) {
-		return log_file.append(filename);
-	}
-	
-	void log_raw_data(const pocsag::POCSAGPacket& packet, const uint32_t frequency);
-	void log_decoded(const pocsag::POCSAGPacket& packet, const std::string text);
+   public:
+    Optional<File::Error> append(const std::string& filename) {
+        return log_file.append(filename);
+    }
 
-private:
-	LogFile log_file { };
+    void log_raw_data(const pocsag::POCSAGPacket& packet, const uint32_t frequency);
+    void log_decoded(Timestamp timestamp, const std::string& text);
+
+   private:
+    LogFile log_file{};
 };
 
 namespace ui {
 
+class BitsIndicator : public Widget {
+   public:
+    BitsIndicator(Point position)
+        : Widget{{position, {2, height}}} {}
+
+    void paint(Painter& painter) override;
+    void set_bits(uint32_t bits) {
+        if (bits != bits_) {
+            bits_ = bits;
+            set_dirty();
+        }
+    }
+
+   private:
+    static constexpr uint8_t height = 16;
+    uint32_t bits_ = 0;
+};
+
+class FrameIndicator : public Widget {
+   public:
+    FrameIndicator(Point position)
+        : Widget{{position, {4, height}}} {}
+
+    void paint(Painter& painter) override;
+    void set_frames(uint8_t frame_count) {
+        if (frame_count != frame_count_) {
+            frame_count_ = frame_count;
+            set_dirty();
+        }
+    }
+
+    void set_sync(bool has_sync) {
+        if (has_sync != has_sync_) {
+            has_sync_ = has_sync;
+            set_dirty();
+        }
+    }
+
+   private:
+    static constexpr uint8_t height = 16;
+    uint8_t frame_count_ = 0;
+    bool has_sync_ = false;
+};
+
+struct POCSAGSettings {
+    bool enable_small_font = false;
+    bool enable_logging = false;
+    bool enable_raw_log = false;
+    bool enable_ignore = false;
+    bool hide_bad_data = false;
+    bool hide_addr_only = false;
+    uint32_t address_to_ignore = 0;
+    bool use_new_proc = false;
+};
+
+class POCSAGSettingsView : public View {
+   public:
+    POCSAGSettingsView(NavigationView& nav, POCSAGSettings& settings);
+
+    std::string title() const override { return "POCSAG Config"; };
+    void focus() override { button_save.focus(); }
+
+   private:
+    POCSAGSettings& settings_;
+
+    Checkbox check_beta{
+        {0 * 8 + 2, 18 * 16 - 4},
+        6,
+        "Beta",
+        true /*small*/};
+
+    Checkbox check_log{
+        {2 * 8, 2 * 16},
+        10,
+        "Enable Log"};
+
+    Checkbox check_log_raw{
+        {2 * 8, 4 * 16},
+        12,
+        "Log Raw Data"};
+
+    Checkbox check_small_font{
+        {2 * 8, 6 * 16},
+        4,
+        "Use Small Font"};
+
+    Checkbox check_hide_bad{
+        {2 * 8, 8 * 16},
+        22,
+        "Hide Bad Data"};
+
+    Checkbox check_hide_addr_only{
+        {2 * 8, 10 * 16},
+        22,
+        "Hide Addr Only"};
+
+    Checkbox check_ignore{
+        {2 * 8, 12 * 16},
+        22,
+        "Enable Ignored Address"};
+
+    NumberField field_ignore{
+        {7 * 8, 13 * 16 + 8},
+        7,
+        {0, 9999999},
+        1,
+        '0'};
+
+    Button button_save{
+        {11 * 8, 16 * 16, 10 * 8, 2 * 16},
+        "Save"};
+};
+
 class POCSAGAppView : public View {
-public:
-	POCSAGAppView(NavigationView& nav);
-	~POCSAGAppView();
+   public:
+    POCSAGAppView(NavigationView& nav);
+    ~POCSAGAppView();
 
-	void set_parent_rect(const Rect new_parent_rect) override;
-	void focus() override;
+    std::string title() const override { return "POCSAG RX"; };
+    void focus() override;
 
-	std::string title() const override { return "POCSAG RX"; };
+   private:
+    static constexpr uint32_t initial_target_frequency = 466'175'000;
+    bool logging() const { return settings_.enable_logging; };
+    bool logging_raw() const { return settings_.enable_raw_log; };
+    bool ignore() const { return settings_.enable_ignore; };
+    bool hide_bad_data() const { return settings_.hide_bad_data; };
+    bool hide_addr_only() const { return settings_.hide_addr_only; };
 
-private:
-	static constexpr uint32_t initial_target_frequency = 466175000;
+    NavigationView& nav_;
+    RxRadioState radio_state_{};
 
-	// app save settings
-	std::app_settings 		settings { }; 		
-	std::app_settings::AppSettings 	app_settings { };
+    // Settings
+    POCSAGSettings settings_{};
+    app_settings::SettingsManager app_settings_{
+        "rx_pocsag"sv,
+        app_settings::Mode::RX,
+        {
+            {"small_font"sv, &settings_.enable_small_font},
+            {"enable_logging"sv, &settings_.enable_logging},
+            {"enable_ignore"sv, &settings_.enable_ignore},
+            {"address_to_ignore"sv, &settings_.address_to_ignore},
+            {"hide_bad_data"sv, &settings_.hide_bad_data},
+            {"hide_addr_only"sv, &settings_.hide_addr_only},
+            {"use_new_proc"sv, &settings_.use_new_proc},
+        }};
 
-	bool logging { true };
-	bool ignore { true };
-	uint32_t last_address = 0xFFFFFFFF;
-	pocsag::POCSAGState pocsag_state { };
+    void refresh_ui();
+    void handle_decoded(Timestamp timestamp, const std::string& prefix);
+    void on_packet(const POCSAGPacketMessage* message);
+    void on_stats(const POCSAGStatsMessage* stats);
 
-	RFAmpField field_rf_amp {
-		{ 13 * 8, 0 * 16 }
-	};
-	LNAGainField field_lna {
-		{ 15 * 8, 0 * 16 }
-	};
-	VGAGainField field_vga {
-		{ 18 * 8, 0 * 16 }
-	};
-	RSSI rssi {
-		{ 21 * 8, 0, 6 * 8, 4 },
-	};
-	Channel channel {
-		{ 21 * 8, 5, 6 * 8, 4 },
-	};
-	Audio audio{
-		{ 21 * 8, 10, 6 * 8, 4 },
-	};
-	
-	FrequencyField field_frequency {
-		{ 0 * 8, 0 * 8 },
-	};
-	Checkbox check_log {
-		{ 24 * 8, 21 },
-		3,
-		"LOG",
-		true
-	};
-	NumberField field_volume{
-		{ 28 * 8, 0 * 16 },
-		2,
-		{ 0, 99 },
-		1,
-		' ',
-	};
-	
-	Checkbox check_ignore {
-		{ 1 * 8, 21 },
-		12,
-		"Ignore addr:",
-		true
-	};
-	SymField sym_ignore {
-		{ 16 * 8, 21 },
-		7,
-		SymField::SYMFIELD_DEC
-	};
+    uint32_t last_address = 0xFFFFFFFF;
+    pocsag::EccContainer ecc{};
+    pocsag::POCSAGState pocsag_state{&ecc};
+    POCSAGLogger logger{};
+    uint16_t packet_count = 0;
 
-	Console console {
-		{ 0, 3 * 16, 240, 256 }
-	};
+    RxFrequencyField field_frequency{
+        {0 * 8, 0 * 8},
+        nav_};
 
-	std::unique_ptr<POCSAGLogger> logger { };
+    RFAmpField field_rf_amp{
+        {11 * 8, 0 * 16}};
+    LNAGainField field_lna{
+        {13 * 8, 0 * 16}};
+    VGAGainField field_vga{
+        {16 * 8, 0 * 16}};
 
-	uint32_t target_frequency_ = initial_target_frequency;
-	
-	void update_freq(rf::Frequency f);
+    RSSI rssi{
+        {19 * 8 - 4, 3, 6 * 8, 4}};
+    Audio audio{
+        {19 * 8 - 4, 8, 6 * 8, 4}};
 
-	void on_packet(const POCSAGPacketMessage * message);
+    NumberField field_squelch{
+        {25 * 8, 0 * 16},
+        2,
+        {0, 99},
+        1,
+        ' ',
+        true /*wrap*/};
+    AudioVolumeField field_volume{
+        {28 * 8, 0 * 16}};
 
-	void on_headphone_volume_changed(int32_t v);
+    Image image_status{
+        {0 * 8 + 4, 1 * 16 + 2, 16, 16},
+        &bitmap_icon_pocsag,
+        Color::white(),
+        Color::black()};
 
-	uint32_t target_frequency() const;
-	void set_target_frequency(const uint32_t new_value);
-	
-	MessageHandlerRegistration message_handler_packet {
-		Message::ID::POCSAGPacket,
-		[this](Message* const p) {
-			const auto message = static_cast<const POCSAGPacketMessage*>(p);
-			this->on_packet(message);
-		}
-	};
+    Text text_packet_count{
+        {3 * 8, 1 * 16 + 2, 5 * 8, 16},
+        "0"};
+
+    BitsIndicator widget_bits{
+        {9 * 7 + 6, 1 * 16 + 2}};
+
+    FrameIndicator widget_frames{
+        {9 * 8, 1 * 16 + 2}};
+
+    Button button_ignore_last{
+        {10 * 8, 1 * 16, 12 * 8, 20},
+        "Ignore Last"};
+
+    Button button_config{
+        {22 * 8, 1 * 16, 8 * 8, 20},
+        "Config"};
+
+    Console console{
+        {0, 2 * 16 + 6, screen_width, screen_height - 56}};
+
+    MessageHandlerRegistration message_handler_packet{
+        Message::ID::POCSAGPacket,
+        [this](Message* const p) {
+            const auto message = static_cast<const POCSAGPacketMessage*>(p);
+            this->on_packet(message);
+        }};
+
+    MessageHandlerRegistration message_handler_stats{
+        Message::ID::POCSAGStats,
+        [this](Message* const p) {
+            const auto stats = static_cast<const POCSAGStatsMessage*>(p);
+            this->on_stats(stats);
+        }};
 };
 
 } /* namespace ui */
 
-#endif/*__POCSAG_APP_H__*/
+#endif /*__POCSAG_APP_H__*/

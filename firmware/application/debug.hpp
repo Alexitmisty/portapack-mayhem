@@ -24,20 +24,29 @@
 #define __DEBUG_H__
 
 #include "hackrf_gpio.hpp"
+#include <string>
 
-extern void draw_guru_meditation(uint8_t, const char *);
-extern void draw_guru_meditation(uint8_t, const char *, struct extctx *, uint32_t);
+void __debug_log(const std::string& msg);
+#define __LOG2(l, msg) __debug_log(std::string{#l} + ":" + msg)
+#define __LOG1(l, msg) __LOG2(l, msg)
+#define DEBUG_LOG(msg) __LOG1(__LINE__, msg)
+
+extern void draw_guru_meditation(uint8_t, const char*);
+extern void draw_guru_meditation(uint8_t, const char*, struct extctx*, uint32_t);
 
 extern uint32_t __process_stack_base__;
 extern uint32_t __process_stack_end__;
-#define CRT0_STACKS_FILL_PATTERN    0x55555555
+#define CRT0_STACKS_FILL_PATTERN 0x55555555
 
-inline uint32_t get_free_stack_space(){
-    uint32_t *p;
-    for (p = &__process_stack_base__; *p == CRT0_STACKS_FILL_PATTERN && p < &__process_stack_end__; p++);
+inline uint32_t get_free_stack_space() {
+    uint32_t* p;
+    for (p = &__process_stack_base__; *p == CRT0_STACKS_FILL_PATTERN && p < &__process_stack_end__; p++)
+        ;
     auto stack_space_left = p - &__process_stack_base__;
 
     return stack_space_left;
 }
 
-#endif/*__DEBUG_H__*/
+bool stack_dump();
+
+#endif /*__DEBUG_H__*/

@@ -27,6 +27,8 @@
 
 enable_language(C CXX ASM)
 
+include(CheckCXXCompilerFlag)
+
 project(baseband_shared)
 
 # Compiler options here.
@@ -36,7 +38,13 @@ set(USE_OPT "-O3 -g -falign-functions=16 -fno-math-errno --specs=nano.specs")
 set(USE_COPT "-std=gnu99")
 
 # C++ specific options here (added to USE_OPT).
-set(USE_CPPOPT "-std=c++17 -fno-rtti -fno-exceptions -Weffc++ -Wuninitialized")
+check_cxx_compiler_flag("-std=c++20" cpp20_supported)
+if(cpp20_supported)
+	set(USE_CPPOPT "-std=c++20")
+else()
+	set(USE_CPPOPT "-std=c++17")
+endif()
+set(USE_CPPOPT "${USE_CPPOPT} -fno-rtti -fno-exceptions -Weffc++ -Wuninitialized -Wno-volatile")
 
 # Enable this if you want the linker to remove unused code and data
 set(USE_LINK_GC yes)
@@ -139,6 +147,8 @@ set(CPPSRC
 	${COMMON}/chibios_cpp.cpp
 	debug.cpp
 	${COMMON}/gcc.cpp
+	${COMMON}/performance_counter.cpp
+	${COMMON}/random.cpp
 	tone_gen.cpp
 )
 
@@ -434,6 +444,13 @@ set(MODE_CPPSRC
 )
 DeclareTargets(PPOC pocsag)
 
+### POCSAG2 RX
+
+set(MODE_CPPSRC
+	proc_pocsag2.cpp
+)
+DeclareTargets(PPO2 pocsag2)
+
 ### RDS
 
 set(MODE_CPPSRC
@@ -461,6 +478,13 @@ set(MODE_CPPSRC
 	proc_siggen.cpp
 )
 DeclareTargets(PSIG siggen)
+
+### Spectrum painter
+
+set(MODE_CPPSRC
+	proc_spectrum_painter.cpp
+)
+DeclareTargets(PSPT spectrum_painter)
 
 ### SSTV TX
 
